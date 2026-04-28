@@ -1,0 +1,54 @@
+{
+  "runId": "ad388adf-3b57-49a0-8b44-fb182cd9c583",
+  "model": "pytorch_mlp",
+  "config": {
+    "model": "pytorch_mlp",
+    "dataset": "time_series",
+    "epochs": 10,
+    "batchSize": 32,
+    "learningRate": 0.001,
+    "hiddenDims": [
+      64,
+      32
+    ],
+    "dropout": 0.3,
+    "params": {
+      "windows": 3
+    }
+  },
+  "metrics": {
+    "accuracy": 1.0,
+    "loss": 0.2407,
+    "f1": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "runtimeMs": 206,
+    "latencyMs": 1717,
+    "throughput": 582.1,
+    "epochCurve": [
+      0.6247,
+      0.4652,
+      0.332,
+      0.2662,
+      0.2469,
+      0.2442,
+      0.2456,
+      0.238,
+      0.2348,
+      0.2407
+    ],
+    "windowStats": [],
+    "confMatrix": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        120
+      ]
+    ],
+    "featureImportance": {}
+  },
+  "timestamp": "2026-04-27T19:22:13Z"
+}

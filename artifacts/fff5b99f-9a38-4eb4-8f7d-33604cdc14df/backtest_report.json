@@ -1,0 +1,39 @@
+{
+  "runId": "fff5b99f-9a38-4eb4-8f7d-33604cdc14df",
+  "config": {
+    "model": "pytorch_mlp",
+    "dataset": "time_series",
+    "epochs": 10,
+    "batchSize": 32,
+    "learningRate": 0.001,
+    "hiddenDims": [
+      64,
+      32
+    ],
+    "dropout": 0.3,
+    "params": {
+      "windows": 3
+    }
+  },
+  "windowStats": [
+    {
+      "window": 0,
+      "accuracy": 1.0,
+      "f1": 1.0,
+      "loss": 0.0
+    },
+    {
+      "window": 1,
+      "accuracy": 1.0,
+      "f1": 1.0,
+      "loss": 0.0
+    },
+    {
+      "window": 2,
+      "accuracy": 1.0,
+      "f1": 1.0,
+      "loss": 0.0
+    }
+  ],
+  "timestamp": "2026-04-27T19:25:54Z"
+}
