@@ -99,11 +99,12 @@ def loadDataset(name: str) -> tuple[np.ndarray, np.ndarray, list[str]]:
 
     return X, y, featureNames
 
-
 def loadCsvDataset(path: str) -> tuple[np.ndarray, np.ndarray, list[str]]:
     import csv
+
     metaPath = path.replace(".csv", ".meta.json")
     labelCol = "label"
+
     if os.path.exists(metaPath):
         with open(metaPath) as f:
             meta = json.load(f)
@@ -117,41 +118,72 @@ def loadCsvDataset(path: str) -> tuple[np.ndarray, np.ndarray, list[str]]:
         raise ValueError(f"CSV at {path} is empty")
 
     headers = list(rows[0].keys())
+
     if labelCol not in headers:
         raise ValueError(f"Label column '{labelCol}' not found in {headers}")
 
-    featureNames = [h for h in headers if h != labelCol]
-    X = np.array([[float(r[h]) for h in featureNames] for r in rows], dtype=np.float32)
-    y = np.array([int(float(r[labelCol])) for r in rows], dtype=np.int64)
+    rawFeatureNames = [h for h in headers if h != labelCol]
+    encodedColumns = []
+    featureNames = []
+
+    for colName in rawFeatureNames:
+        values = [str(r.get(colName, "")).strip() for r in rows]
+
+        numericValues = []
+        isNumeric = True
+
+        for value in values:
+            if value == "":
+                numericValues.append(0.0)
+                continue
+
+            try:
+                numericValues.append(float(value))
+            except ValueError:
+                isNumeric = False
+                break
+
+        if isNumeric:
+            encodedColumns.append(numericValues)
+            featureNames.append(colName)
+        else:
+            categories = sorted(set(values))
+            categoryMap = {category: idx for idx, category in enumerate(categories)}
+            encodedColumns.append([float(categoryMap[value]) for value in values])
+            featureNames.append(colName)
+
+    X = np.array(encodedColumns, dtype=np.float32).T
+
+    labelValues = [str(r.get(labelCol, "")).strip() for r in rows]
+
+    numericLabels = []
+    labelsAreNumeric = True
+
+    for value in labelValues:
+        try:
+            numericLabels.append(float(value))
+        except ValueError:
+            labelsAreNumeric = False
+            break
+
+    if labelsAreNumeric:
+        uniqueLabels = sorted(set(numericLabels))
+
+        if len(uniqueLabels) <= 20 and all(float(v).is_integer() for v in uniqueLabels):
+            y = np.array([int(v) for v in numericLabels], dtype=np.int64)
+        else:
+            medianLabel = float(np.median(numericLabels))
+            y = np.array([1 if v >= medianLabel else 0 for v in numericLabels], dtype=np.int64)
+            print(f"continuous label '{labelCol}' converted to binary target using median={medianLabel:.2f}")
+    else:
+        categories = sorted(set(labelValues))
+        categoryMap = {category: idx for idx, category in enumerate(categories)}
+        y = np.array([categoryMap[value] for value in labelValues], dtype=np.int64)
+
+    if len(set(y.tolist())) < 2:
+        raise ValueError(f"Label column '{labelCol}' must contain at least two classes after encoding")
+
     return X, y, featureNames
-
-
-def computeMetricsFull(predictions: np.ndarray, labels: np.ndarray) -> tuple[float, float, float, float]:
-    predictions = np.asarray(predictions).flatten()
-    labels = np.asarray(labels).flatten()
-
-    acc = float(np.mean(predictions == labels))
-    tp = float(np.sum((predictions == 1) & (labels == 1)))
-    fp = float(np.sum((predictions == 1) & (labels == 0)))
-    fn = float(np.sum((predictions == 0) & (labels == 1)))
-
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1        = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-
-    # use C++ for acc+f1 if available, keep python precision/recall
-    if evalLib is not None:
-        n = len(predictions)
-        pred_c  = (ctypes.c_double * n)(*predictions.astype(float))
-        label_c = (ctypes.c_double * n)(*labels.astype(float))
-        acc_c = ctypes.c_double(0.0)
-        f1_c  = ctypes.c_double(0.0)
-        evalLib.computeMetrics(pred_c, label_c, ctypes.c_int(n), ctypes.byref(acc_c), ctypes.byref(f1_c))
-        acc = acc_c.value
-        f1  = f1_c.value
-
-    return acc, f1, precision, recall
-
 
 def confusionMatrix(predictions: np.ndarray, labels: np.ndarray) -> list[list[int]]:
     predictions = np.asarray(predictions).flatten()
@@ -202,6 +234,30 @@ def buildMlp(inputDim: int, hiddenDims: list[int], dropout: float = 0.3):
 
     return _Net()
 
+def computeMetricsFull(predictions: np.ndarray, labels: np.ndarray) -> tuple[float, float, float, float]:
+    predictions = np.asarray(predictions).flatten()
+    labels = np.asarray(labels).flatten()
+
+    acc = float(np.mean(predictions == labels))
+    tp = float(np.sum((predictions == 1) & (labels == 1)))
+    fp = float(np.sum((predictions == 1) & (labels == 0)))
+    fn = float(np.sum((predictions == 0) & (labels == 1)))
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    if evalLib is not None:
+        n = len(predictions)
+        predC = (ctypes.c_double * n)(*predictions.astype(float))
+        labelC = (ctypes.c_double * n)(*labels.astype(float))
+        accC = ctypes.c_double(0.0)
+        f1C = ctypes.c_double(0.0)
+        evalLib.computeMetrics(predC, labelC, ctypes.c_int(n), ctypes.byref(accC), ctypes.byref(f1C))
+        acc = accC.value
+        f1 = f1C.value
+
+    return acc, f1, precision, recall
 
 def trainSklearn(config: dict[str, Any]) -> tuple[jobMetrics, Any]:
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
